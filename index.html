@@ -17,6 +17,21 @@
   .graph-container{width:min(95vw,700px);margin-top:2rem;position:relative}
   canvas#graph{width:100%;height:220px;display:block;border-radius:12px;background:#1a1a2e}
   .steady-info{margin-top:.75rem;font-size:.8rem;opacity:.5;text-align:center;min-height:1.2em}
+  .identify-section{margin-top:2rem;display:flex;flex-direction:column;align-items:center;width:min(95vw,700px)}
+  .identify-btn{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:2rem;padding:.75rem 1.8rem;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s,box-shadow .1s,opacity .2s;box-shadow:0 0 30px rgba(16,185,129,.25);-webkit-tap-highlight-color:transparent}
+  .identify-btn:active{transform:scale(.95)}
+  .identify-btn:disabled{opacity:.6;cursor:not-allowed}
+  .identify-btn.listening{animation:listenPulse 1s infinite;background:linear-gradient(135deg,#f59e0b,#d97706)}
+  @keyframes listenPulse{0%,100%{box-shadow:0 0 30px rgba(245,158,11,.3)}50%{box-shadow:0 0 50px rgba(245,158,11,.6)}}
+  .identify-result{margin-top:1rem;padding:1rem 1.5rem;background:#1a1a2e;border-radius:12px;width:100%;display:none;align-items:center;gap:1rem}
+  .identify-result.show{display:flex}
+  .identify-result img{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0}
+  .identify-result .info{flex:1;min-width:0}
+  .identify-result .title{font-size:1.1rem;font-weight:600;color:#fff}
+  .identify-result .artist{font-size:.9rem;color:#a78bfa;margin-top:.2rem}
+  .identify-result .album{font-size:.8rem;opacity:.5;margin-top:.2rem}
+  .identify-result .error{color:#f87171;font-size:.9rem}
+  .identify-status{margin-top:.5rem;font-size:.8rem;opacity:.5;min-height:1.2em;text-align:center}
 </style>
 </head>
 <body>
@@ -27,6 +42,19 @@
   <canvas id="graph"></canvas>
   <div class="steady-info" id="steadyInfo"></div>
 </div>
+<div class="identify-section">
+  <button class="identify-btn" id="identifyBtn">🎵 Identify Song</button>
+  <div class="identify-status" id="identifyStatus"></div>
+  <div class="identify-result" id="identifyResult">
+    <img id="albumArt" src="" alt="">
+    <div class="info">
+      <div class="title" id="songTitle"></div>
+      <div class="artist" id="songArtist"></div>
+      <div class="album" id="songAlbum"></div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 <script>
 (()=>{
   const bpmEl=document.getElementById('bpm'),btn=document.getElementById('tap'),canvas=document.getElementById('graph'),ctx=canvas.getContext('2d'),steadyInfoEl=document.getElementById('steadyInfo');
@@ -251,6 +279,95 @@
 
   // Initial draw
   drawGraph();
+
+  // --- ACRCloud Song Identification ---
+  const ACR={host:'identify-us-west-2.acrcloud.com',key:'15ad007b1de259c2ff7c2e29d32f8f53',secret:'IWfEIQO0PV3QWW1kiJrs1S4KfIhUmkZVxJzywLuc'};
+  const idBtn=document.getElementById('identifyBtn'),idStatus=document.getElementById('identifyStatus'),idResult=document.getElementById('identifyResult');
+  const elTitle=document.getElementById('songTitle'),elArtist=document.getElementById('songArtist'),elAlbum=document.getElementById('songAlbum'),elArt=document.getElementById('albumArt');
+  let identifying=false;
+
+  idBtn.addEventListener('click',async()=>{
+    if(identifying)return;
+    identifying=true;
+    idBtn.disabled=true;
+    idBtn.classList.add('listening');
+    idBtn.textContent='🎤 Listening…';
+    idStatus.textContent='Recording 5 seconds of audio…';
+    idResult.classList.remove('show');
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
+      const chunks=[];
+      recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data)};
+      recorder.start();
+      await new Promise(r=>setTimeout(r,5000));
+      recorder.stop();
+      await new Promise(r=>{recorder.onstop=r});
+      stream.getTracks().forEach(t=>t.stop());
+      const blob=new Blob(chunks,{type:recorder.mimeType});
+      idBtn.textContent='🔍 Identifying…';
+      idStatus.textContent='Sending to ACRCloud…';
+      const result=await identifySong(blob);
+      showResult(result);
+    }catch(e){
+      idStatus.textContent='';
+      idResult.classList.add('show');
+      elArt.style.display='none';
+      elTitle.textContent='';elArtist.textContent='';elAlbum.textContent='';
+      idResult.innerHTML='<div class="error">'+((e.name==='NotAllowedError')?'Microphone access denied':'Error: '+e.message)+'</div>';
+    }finally{
+      identifying=false;
+      idBtn.disabled=false;
+      idBtn.classList.remove('listening');
+      idBtn.textContent='🎵 Identify Song';
+    }
+  });
+
+  async function identifySong(blob){
+    const timestamp=Math.floor(Date.now()/1000);
+    const stringToSign=`POST\n/v1/identify\n${ACR.key}\naudio\n1\n${timestamp}`;
+    const signature=CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA1(stringToSign,ACR.secret));
+    const form=new FormData();
+    form.append('sample',blob,'sample.webm');
+    form.append('sample_bytes',blob.size);
+    form.append('access_key',ACR.key);
+    form.append('data_type','audio');
+    form.append('signature_version','1');
+    form.append('signature',signature);
+    form.append('timestamp',timestamp);
+    const res=await fetch(`https://${ACR.host}/v1/identify`,{method:'POST',body:form});
+    return res.json();
+  }
+
+  function showResult(data){
+    idResult.innerHTML='<img id="albumArt" src="" alt=""><div class="info"><div class="title" id="songTitle"></div><div class="artist" id="songArtist"></div><div class="album" id="songAlbum"></div></div>';
+    const art=idResult.querySelector('#albumArt'),ti=idResult.querySelector('#songTitle'),ar=idResult.querySelector('#songArtist'),al=idResult.querySelector('#songAlbum');
+    if(data.status&&data.status.code===0&&data.metadata&&data.metadata.music&&data.metadata.music.length>0){
+      const m=data.metadata.music[0];
+      ti.textContent=m.title||'Unknown Title';
+      ar.textContent=m.artists?m.artists.map(a=>a.name).join(', '):'Unknown Artist';
+      al.textContent=m.album?m.album.name:'';
+      // Album art from Spotify/Deezer external metadata
+      let artUrl='';
+      if(m.external_metadata){
+        if(m.external_metadata.spotify&&m.external_metadata.spotify.album&&m.external_metadata.spotify.album.id){
+          // No direct image URL from ACR, hide art
+        }
+        if(m.external_metadata.deezer&&m.external_metadata.deezer.album&&m.external_metadata.deezer.album.id){
+          artUrl=`https://e-cdns-images.dzcdn.net/images/cover/${m.external_metadata.deezer.album.id}/264x264.jpg`;
+        }
+      }
+      if(artUrl){art.src=artUrl;art.style.display='block'}else{art.style.display='none'}
+      idStatus.textContent='';
+    }else{
+      art.style.display='none';
+      ti.textContent='';ar.textContent='';al.textContent='';
+      const msg=data.status?data.status.msg:'Unknown error';
+      idResult.innerHTML='<div class="error">❌ '+(data.status&&data.status.code===1001?'No match found — try with louder/clearer audio':msg)+'</div>';
+      idStatus.textContent='';
+    }
+    idResult.classList.add('show');
+  }
 })();
 </script>
 </body>
