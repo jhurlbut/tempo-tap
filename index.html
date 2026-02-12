@@ -280,46 +280,87 @@
   // Initial draw
   drawGraph();
 
-  // --- ACRCloud Song Identification ---
+  // --- ACRCloud Song Identification (Rolling Buffer) ---
   const ACR={host:'identify-us-west-2.acrcloud.com',key:'15ad007b1de259c2ff7c2e29d32f8f53',secret:'IWfEIQO0PV3QWW1kiJrs1S4KfIhUmkZVxJzywLuc'};
   const idBtn=document.getElementById('identifyBtn'),idStatus=document.getElementById('identifyStatus'),idResult=document.getElementById('identifyResult');
-  const elTitle=document.getElementById('songTitle'),elArtist=document.getElementById('songArtist'),elAlbum=document.getElementById('songAlbum'),elArt=document.getElementById('albumArt');
   let identifying=false;
+
+  // Rolling buffer: keep last ~15 seconds of mic audio always recording
+  const BUFFER_SECONDS=15;
+  const SLICE_MS=1000; // collect 1s chunks
+  let micStream=null, bufferRecorder=null, audioChunks=[], bufferReady=false;
+
+  async function startRollingBuffer(){
+    try{
+      micStream=await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+      });
+      const mimeType=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
+      bufferRecorder=new MediaRecorder(micStream,{mimeType});
+      bufferRecorder.ondataavailable=e=>{
+        if(e.data.size>0){
+          audioChunks.push({data:e.data,time:Date.now()});
+          // Trim chunks older than BUFFER_SECONDS
+          const cutoff=Date.now()-BUFFER_SECONDS*1000;
+          audioChunks=audioChunks.filter(c=>c.time>=cutoff);
+        }
+      };
+      bufferRecorder.start(SLICE_MS);
+      bufferReady=true;
+      idBtn.textContent='🎵 Identify Song';
+      idStatus.textContent='🎤 Mic ready — play music, then tap Identify';
+      idStatus.style.color='#10b981';
+    }catch(e){
+      if(e.name==='NotAllowedError'){
+        idStatus.textContent='Mic permission denied — tap Identify to retry';
+        idBtn.textContent='🎤 Enable Mic';
+      }else{
+        idStatus.textContent='Mic error: '+e.message;
+      }
+    }
+  }
+
+  // Start buffer on page load
+  startRollingBuffer();
 
   idBtn.addEventListener('click',async()=>{
     if(identifying)return;
+    // If mic not ready yet, try to start it
+    if(!bufferReady){
+      await startRollingBuffer();
+      if(!bufferReady)return;
+      return; // Just started mic — let it buffer a few seconds first
+    }
+    if(audioChunks.length<3){
+      idStatus.textContent='Need a few more seconds of audio…';
+      idStatus.style.color='#f59e0b';
+      return;
+    }
     identifying=true;
     idBtn.disabled=true;
-    idBtn.classList.add('listening');
-    idBtn.textContent='🎤 Listening…';
-    idStatus.textContent='Recording 5 seconds of audio…';
+    idBtn.textContent='🔍 Identifying…';
+    idStatus.textContent='Sending audio to ACRCloud…';
+    idStatus.style.color='';
     idResult.classList.remove('show');
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      const recorder=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
-      const chunks=[];
-      recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data)};
-      recorder.start();
-      await new Promise(r=>setTimeout(r,5000));
-      recorder.stop();
-      await new Promise(r=>{recorder.onstop=r});
-      stream.getTracks().forEach(t=>t.stop());
-      const blob=new Blob(chunks,{type:recorder.mimeType});
-      idBtn.textContent='🔍 Identifying…';
-      idStatus.textContent='Sending to ACRCloud…';
+      // Grab last ~10 seconds from the rolling buffer
+      const cutoff=Date.now()-10000;
+      const recent=audioChunks.filter(c=>c.time>=cutoff);
+      const blob=new Blob(recent.map(c=>c.data),{type:bufferRecorder.mimeType});
       const result=await identifySong(blob);
       showResult(result);
     }catch(e){
-      idStatus.textContent='';
       idResult.classList.add('show');
-      elArt.style.display='none';
-      elTitle.textContent='';elArtist.textContent='';elAlbum.textContent='';
-      idResult.innerHTML='<div class="error">'+((e.name==='NotAllowedError')?'Microphone access denied':'Error: '+e.message)+'</div>';
+      idResult.innerHTML='<div class="error">Error: '+e.message+'</div>';
+      idStatus.textContent='';
     }finally{
       identifying=false;
       idBtn.disabled=false;
-      idBtn.classList.remove('listening');
       idBtn.textContent='🎵 Identify Song';
+      if(bufferReady){
+        idStatus.textContent='🎤 Mic ready — play music, then tap Identify';
+        idStatus.style.color='#10b981';
+      }
     }
   });
 
