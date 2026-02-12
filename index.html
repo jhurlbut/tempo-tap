@@ -207,19 +207,32 @@
       ctx.fill();
     }
 
-    // Steady BPM horizontal lines
+    // Steady BPM horizontal lines — anchored to region bounds
     for(const r of regions){
+      const x1=xOf(bpmHistory[r.start]);
+      const x2=xOf(bpmHistory[r.end]);
       const y=yOf(r.mean);
+      // Dashed line only across the region
       ctx.setLineDash([6,4]);
       ctx.strokeStyle='rgba(0,210,180,0.7)';
       ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(w-pad.right,y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();
       ctx.setLineDash([]);
-      // Label
-      ctx.fillStyle='#00d2b4';
+      // Label anchored to the midpoint of the region
+      const labelX=(x1+x2)/2;
+      const labelY=y-8;
+      const label=`${r.mean} BPM`;
       ctx.font='bold 12px sans-serif';
-      ctx.textAlign='left';
-      ctx.fillText(`${r.mean} BPM`,w-pad.right-60,y-6);
+      const tw=ctx.measureText(label).width;
+      // Background pill for readability
+      ctx.fillStyle='rgba(26,26,46,0.85)';
+      ctx.beginPath();
+      ctx.roundRect(labelX-tw/2-6,labelY-11,tw+12,16,4);
+      ctx.fill();
+      // Text
+      ctx.fillStyle='#00d2b4';
+      ctx.textAlign='center';
+      ctx.fillText(label,labelX,labelY);
     }
 
     // Steady info text
