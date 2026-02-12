@@ -9,8 +9,6 @@
   body{background:#111;color:#eee;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;user-select:none;-webkit-user-select:none;padding:2vh 0}
   .bpm{font-size:clamp(4rem,15vw,10rem);font-weight:200;letter-spacing:-.04em;transition:opacity .3s;margin-top:2vh}
   .bpm span{font-size:.35em;font-weight:400;opacity:.5;vertical-align:middle;margin-left:.2em}
-  .auto-bpm{font-size:1.1rem;font-weight:400;color:#f59e0b;opacity:.7;margin-top:.3rem;min-height:1.4em;text-align:center}
-  .auto-bpm .label{font-size:.7rem;opacity:.5;text-transform:uppercase;letter-spacing:.08em}
   .tap{width:clamp(120px,30vw,180px);height:clamp(120px,30vw,180px);border-radius:50%;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:1.4rem;font-weight:600;letter-spacing:.05em;cursor:pointer;transition:transform .08s,box-shadow .08s;box-shadow:0 0 40px rgba(99,102,241,.3);margin-top:1.5rem;-webkit-tap-highlight-color:transparent;flex-shrink:0}
   .tap:active{transform:scale(.93);box-shadow:0 0 60px rgba(139,92,246,.5)}
   .hint{margin-top:1rem;font-size:.85rem;opacity:.35;transition:opacity .5s}
@@ -19,45 +17,20 @@
   .graph-container{width:min(95vw,700px);margin-top:2rem;position:relative}
   canvas#graph{width:100%;height:220px;display:block;border-radius:12px;background:#1a1a2e}
   .steady-info{margin-top:.75rem;font-size:.8rem;opacity:.5;text-align:center;min-height:1.2em}
-  .identify-section{margin-top:2rem;display:flex;flex-direction:column;align-items:center;width:min(95vw,700px)}
-  .identify-btn{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:2rem;padding:.75rem 1.8rem;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s,box-shadow .1s,opacity .2s;box-shadow:0 0 30px rgba(16,185,129,.25);-webkit-tap-highlight-color:transparent}
-  .identify-btn:active{transform:scale(.95)}
-  .identify-btn:disabled{opacity:.6;cursor:not-allowed}
-  .identify-btn.listening{animation:listenPulse 1s infinite;background:linear-gradient(135deg,#f59e0b,#d97706)}
-  @keyframes listenPulse{0%,100%{box-shadow:0 0 30px rgba(245,158,11,.3)}50%{box-shadow:0 0 50px rgba(245,158,11,.6)}}
-  .identify-result{margin-top:1rem;padding:1rem 1.5rem;background:#1a1a2e;border-radius:12px;width:100%;display:none;align-items:center;gap:1rem}
-  .identify-result.show{display:flex}
-  .identify-result img{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0}
-  .identify-result .info{flex:1;min-width:0}
-  .identify-result .title{font-size:1.1rem;font-weight:600;color:#fff}
-  .identify-result .artist{font-size:.9rem;color:#a78bfa;margin-top:.2rem}
-  .identify-result .album{font-size:.8rem;opacity:.5;margin-top:.2rem}
-  .identify-result .error{color:#f87171;font-size:.9rem}
-  .identify-status{margin-top:.5rem;font-size:.8rem;opacity:.5;min-height:1.2em;text-align:center}
+  .shazam-link{display:inline-flex;align-items:center;gap:.5rem;margin-top:2rem;padding:.65rem 1.6rem;background:linear-gradient(135deg,#0af,#06f);color:#fff;text-decoration:none;border-radius:2rem;font-size:.95rem;font-weight:600;transition:transform .1s,box-shadow .1s;box-shadow:0 0 25px rgba(0,170,255,.25);-webkit-tap-highlight-color:transparent}
+  .shazam-link:active{transform:scale(.95)}
+  .shazam-link svg{width:20px;height:20px;fill:currentColor}
 </style>
 </head>
 <body>
 <div class="bpm" id="bpm">—<span>BPM</span></div>
-<div class="auto-bpm" id="autoBpm"></div>
 <button class="tap" id="tap">TAP</button>
 <div class="hint">tap to the beat</div>
 <div class="graph-container">
   <canvas id="graph"></canvas>
   <div class="steady-info" id="steadyInfo"></div>
 </div>
-<div class="identify-section">
-  <button class="identify-btn" id="identifyBtn">🎵 Identify Song</button>
-  <div class="identify-status" id="identifyStatus"></div>
-  <div class="identify-result" id="identifyResult">
-    <img id="albumArt" src="" alt="">
-    <div class="info">
-      <div class="title" id="songTitle"></div>
-      <div class="artist" id="songArtist"></div>
-      <div class="album" id="songAlbum"></div>
-    </div>
-  </div>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<a class="shazam-link" href="https://www.shazam.com/recognise" target="_blank">🎵 Identify with Shazam</a>
 <script>
 (()=>{
   const bpmEl=document.getElementById('bpm'),btn=document.getElementById('tap'),canvas=document.getElementById('graph'),ctx=canvas.getContext('2d'),steadyInfoEl=document.getElementById('steadyInfo');
@@ -75,11 +48,10 @@
   window.addEventListener('resize',resizeCanvas);
 
   let taps=[], timeout;
-  // Each entry: {time: Date.now(), bpm: number}
   let bpmHistory=[];
   const WINDOW_SEC=40;
   const STEADY_MIN_TAPS=8;
-  const STEADY_THRESHOLD=0.05; // 5% of mean
+  const STEADY_THRESHOLD=0.05;
 
   btn.addEventListener('pointerdown',e=>{
     e.preventDefault();
@@ -95,11 +67,9 @@
       const avg=intervals.reduce((a,b)=>a+b,0)/intervals.length;
       const bpm=Math.round(60000/avg);
       bpmEl.innerHTML=bpm+'<span>BPM</span>';
-      // Instant BPM from last interval
       const instantBpm=60000/intervals[intervals.length-1];
       bpmHistory.push({time:wallNow,bpm:instantBpm});
     }
-    // Trim old entries
     const cutoff=wallNow-WINDOW_SEC*1000;
     bpmHistory=bpmHistory.filter(d=>d.time>=cutoff);
     drawGraph();
@@ -111,12 +81,6 @@
   function findSteadyRegions(){
     const regions=[];
     if(bpmHistory.length<STEADY_MIN_TAPS)return regions;
-    // Sliding window of STEADY_MIN_TAPS points
-    for(let winSize=STEADY_MIN_TAPS;winSize<=bpmHistory.length;winSize++){
-      // Try all windows of this size, but we'll do a simpler approach:
-      // just use fixed window size = STEADY_MIN_TAPS and slide
-    }
-    // Simple approach: slide a window of size STEADY_MIN_TAPS
     for(let i=0;i<=bpmHistory.length-STEADY_MIN_TAPS;i++){
       const slice=bpmHistory.slice(i,i+STEADY_MIN_TAPS);
       const mean=slice.reduce((s,d)=>s+d.bpm,0)/slice.length;
@@ -126,14 +90,12 @@
         regions.push({start:i,end:i+STEADY_MIN_TAPS-1,mean:Math.round(mean),std});
       }
     }
-    // Merge overlapping regions
     if(regions.length===0)return regions;
     const merged=[{...regions[0]}];
     for(let i=1;i<regions.length;i++){
       const last=merged[merged.length-1];
       if(regions[i].start<=last.end+1){
         last.end=Math.max(last.end,regions[i].end);
-        // Recalc mean for merged
         const slice=bpmHistory.slice(last.start,last.end+1);
         last.mean=Math.round(slice.reduce((s,d)=>s+d.bpm,0)/slice.length);
       }else{
@@ -148,7 +110,6 @@
     if(!w)return;
     ctx.clearRect(0,0,w,h);
 
-    // Background
     ctx.fillStyle='#1a1a2e';
     ctx.beginPath();
     ctx.roundRect(0,0,w,h,12);
@@ -165,11 +126,9 @@
     const pad={top:25,right:15,bottom:30,left:50};
     const gw=w-pad.left-pad.right, gh=h-pad.top-pad.bottom;
 
-    // Time range
     const tMax=bpmHistory[bpmHistory.length-1].time;
     const tMin=tMax-WINDOW_SEC*1000;
 
-    // BPM range with padding
     const bpms=bpmHistory.map(d=>d.bpm);
     let bpmMin=Math.min(...bpms)-10, bpmMax=Math.max(...bpms)+10;
     if(bpmMax-bpmMin<20){const mid=(bpmMax+bpmMin)/2;bpmMin=mid-10;bpmMax=mid+10;}
@@ -179,17 +138,14 @@
 
     // Steady regions - highlight
     const regions=findSteadyRegions();
-    const steadyBpms=new Set();
     for(const r of regions){
       const x1=xOf(bpmHistory[r.start]);
       const x2=xOf(bpmHistory[r.end]);
       ctx.fillStyle='rgba(0,210,180,0.12)';
       ctx.fillRect(x1,pad.top,x2-x1,gh);
-      // Border
       ctx.strokeStyle='rgba(0,210,180,0.3)';
       ctx.lineWidth=1;
       ctx.strokeRect(x1,pad.top,x2-x1,gh);
-      steadyBpms.add(r.mean);
     }
 
     // Grid lines - Y axis
@@ -206,7 +162,7 @@
       ctx.fillText(v,pad.left-6,y+4);
     }
 
-    // X axis labels (seconds ago)
+    // X axis labels
     ctx.textAlign='center';
     ctx.fillStyle='rgba(255,255,255,0.3)';
     for(let s=0;s<=WINDOW_SEC;s+=10){
@@ -243,24 +199,20 @@
       const x1=xOf(bpmHistory[r.start]);
       const x2=xOf(bpmHistory[r.end]);
       const y=yOf(r.mean);
-      // Dashed line only across the region
       ctx.setLineDash([6,4]);
       ctx.strokeStyle='rgba(0,210,180,0.7)';
       ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();
       ctx.setLineDash([]);
-      // Label anchored to the midpoint of the region
       const labelX=(x1+x2)/2;
       const labelY=y-8;
       const label=`${r.mean} BPM`;
       ctx.font='bold 12px sans-serif';
       const tw=ctx.measureText(label).width;
-      // Background pill for readability
       ctx.fillStyle='rgba(26,26,46,0.85)';
       ctx.beginPath();
       ctx.roundRect(labelX-tw/2-6,labelY-11,tw+12,16,4);
       ctx.fill();
-      // Text
       ctx.fillStyle='#00d2b4';
       ctx.textAlign='center';
       ctx.fillText(label,labelX,labelY);
@@ -280,203 +232,7 @@
     }
   }
 
-  // Initial draw
   drawGraph();
-
-  // --- ACRCloud Song Identification (Rolling Buffer) ---
-  const ACR={host:'identify-us-west-2.acrcloud.com',key:'15ad007b1de259c2ff7c2e29d32f8f53',secret:'IWfEIQO0PV3QWW1kiJrs1S4KfIhUmkZVxJzywLuc'};
-  const idBtn=document.getElementById('identifyBtn'),idStatus=document.getElementById('identifyStatus'),idResult=document.getElementById('identifyResult');
-  let identifying=false;
-
-  // Rolling buffer: keep last ~15 seconds of mic audio always recording
-  const BUFFER_SECONDS=15;
-  const SLICE_MS=1000; // collect 1s chunks
-  let micStream=null, bufferRecorder=null, audioChunks=[], bufferReady=false;
-
-  async function startRollingBuffer(){
-    try{
-      micStream=await navigator.mediaDevices.getUserMedia({
-        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
-      });
-      const mimeType=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
-      bufferRecorder=new MediaRecorder(micStream,{mimeType});
-      bufferRecorder.ondataavailable=e=>{
-        if(e.data.size>0){
-          audioChunks.push({data:e.data,time:Date.now()});
-          // Trim chunks older than BUFFER_SECONDS
-          const cutoff=Date.now()-BUFFER_SECONDS*1000;
-          audioChunks=audioChunks.filter(c=>c.time>=cutoff);
-        }
-      };
-      bufferRecorder.start(SLICE_MS);
-      bufferReady=true;
-      idBtn.textContent='🎵 Identify Song';
-      idStatus.textContent='🎤 Mic ready — play music, then tap Identify';
-      idStatus.style.color='#10b981';
-      // Start beat detection on the same stream
-      startBeatDetection(micStream);
-    }catch(e){
-      if(e.name==='NotAllowedError'){
-        idStatus.textContent='Mic permission denied — tap Identify to retry';
-        idBtn.textContent='🎤 Enable Mic';
-      }else{
-        idStatus.textContent='Mic error: '+e.message;
-      }
-    }
-  }
-
-  // --- Auto BPM Detection via onset detection ---
-  const autoBpmEl=document.getElementById('autoBpm');
-  let audioCtx=null, analyser=null, onsetTimes=[], prevEnergy=0;
-  const ONSET_THRESHOLD=1.4; // energy ratio threshold for onset
-  const AUTO_BPM_WINDOW=10000; // 10 second window for averaging
-
-  function startBeatDetection(stream){
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    const source=audioCtx.createMediaStreamSource(stream);
-    analyser=audioCtx.createAnalyser();
-    analyser.fftSize=1024;
-    analyser.smoothingTimeConstant=0.3;
-    source.connect(analyser);
-    const bufLen=analyser.frequencyBinCount;
-    const dataArray=new Uint8Array(bufLen);
-    let frameCount=0;
-
-    function detect(){
-      if(!analyser)return;
-      analyser.getByteFrequencyData(dataArray);
-      // Compute energy (focus on bass frequencies 0-300Hz for beat detection)
-      // At 44.1kHz, fftSize=1024: each bin = ~43Hz, so bins 0-7 ≈ 0-300Hz
-      const bassBins=Math.min(8,bufLen);
-      let energy=0;
-      for(let i=0;i<bassBins;i++) energy+=dataArray[i]*dataArray[i];
-      energy=Math.sqrt(energy/bassBins);
-
-      frameCount++;
-      // Only check every ~3 frames to avoid double-triggers (~20ms apart)
-      if(frameCount%3===0 && prevEnergy>0 && energy>30){
-        const ratio=energy/prevEnergy;
-        if(ratio>ONSET_THRESHOLD){
-          const now=Date.now();
-          onsetTimes.push(now);
-          // Trim old onsets
-          onsetTimes=onsetTimes.filter(t=>t>now-AUTO_BPM_WINDOW);
-        }
-      }
-      prevEnergy=energy*0.7+prevEnergy*0.3; // smoothed energy
-
-      // Calculate auto BPM from onset intervals
-      const now=Date.now();
-      const recent=onsetTimes.filter(t=>t>now-AUTO_BPM_WINDOW);
-      if(recent.length>=4){
-        const intervals=[];
-        for(let i=1;i<recent.length;i++) intervals.push(recent[i]-recent[i-1]);
-        // Filter out very short (<200ms = >300bpm) and very long (>2000ms = <30bpm) intervals
-        const valid=intervals.filter(iv=>iv>=200&&iv<=2000);
-        if(valid.length>=3){
-          // Use median for robustness
-          valid.sort((a,b)=>a-b);
-          const median=valid[Math.floor(valid.length/2)];
-          const autoBpm=Math.round(60000/median);
-          autoBpmEl.innerHTML=`<span class="label">auto-detected</span> ${autoBpm} <span class="label">BPM</span>`;
-        }
-      }else{
-        autoBpmEl.innerHTML='<span class="label">auto-detect</span> listening…';
-      }
-      requestAnimationFrame(detect);
-    }
-    requestAnimationFrame(detect);
-  }
-
-  // Start buffer on page load
-  startRollingBuffer();
-
-  idBtn.addEventListener('click',async()=>{
-    if(identifying)return;
-    // If mic not ready yet, try to start it
-    if(!bufferReady){
-      await startRollingBuffer();
-      if(!bufferReady)return;
-      return; // Just started mic — let it buffer a few seconds first
-    }
-    if(audioChunks.length<3){
-      idStatus.textContent='Need a few more seconds of audio…';
-      idStatus.style.color='#f59e0b';
-      return;
-    }
-    identifying=true;
-    idBtn.disabled=true;
-    idBtn.textContent='🔍 Identifying…';
-    idStatus.textContent='Sending audio to ACRCloud…';
-    idStatus.style.color='';
-    idResult.classList.remove('show');
-    try{
-      // Grab last ~10 seconds from the rolling buffer
-      const cutoff=Date.now()-10000;
-      const recent=audioChunks.filter(c=>c.time>=cutoff);
-      const blob=new Blob(recent.map(c=>c.data),{type:bufferRecorder.mimeType});
-      const result=await identifySong(blob);
-      showResult(result);
-    }catch(e){
-      idResult.classList.add('show');
-      idResult.innerHTML='<div class="error">Error: '+e.message+'</div>';
-      idStatus.textContent='';
-    }finally{
-      identifying=false;
-      idBtn.disabled=false;
-      idBtn.textContent='🎵 Identify Song';
-      if(bufferReady){
-        idStatus.textContent='🎤 Mic ready — play music, then tap Identify';
-        idStatus.style.color='#10b981';
-      }
-    }
-  });
-
-  async function identifySong(blob){
-    const timestamp=Math.floor(Date.now()/1000);
-    const stringToSign=`POST\n/v1/identify\n${ACR.key}\naudio\n1\n${timestamp}`;
-    const signature=CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA1(stringToSign,ACR.secret));
-    const form=new FormData();
-    form.append('sample',blob,'sample.webm');
-    form.append('sample_bytes',blob.size);
-    form.append('access_key',ACR.key);
-    form.append('data_type','audio');
-    form.append('signature_version','1');
-    form.append('signature',signature);
-    form.append('timestamp',timestamp);
-    const res=await fetch(`https://${ACR.host}/v1/identify`,{method:'POST',body:form});
-    return res.json();
-  }
-
-  function showResult(data){
-    idResult.innerHTML='<img id="albumArt" src="" alt=""><div class="info"><div class="title" id="songTitle"></div><div class="artist" id="songArtist"></div><div class="album" id="songAlbum"></div></div>';
-    const art=idResult.querySelector('#albumArt'),ti=idResult.querySelector('#songTitle'),ar=idResult.querySelector('#songArtist'),al=idResult.querySelector('#songAlbum');
-    if(data.status&&data.status.code===0&&data.metadata&&data.metadata.music&&data.metadata.music.length>0){
-      const m=data.metadata.music[0];
-      ti.textContent=m.title||'Unknown Title';
-      ar.textContent=m.artists?m.artists.map(a=>a.name).join(', '):'Unknown Artist';
-      al.textContent=m.album?m.album.name:'';
-      // Album art from Spotify/Deezer external metadata
-      let artUrl='';
-      if(m.external_metadata){
-        if(m.external_metadata.spotify&&m.external_metadata.spotify.album&&m.external_metadata.spotify.album.id){
-          // No direct image URL from ACR, hide art
-        }
-        if(m.external_metadata.deezer&&m.external_metadata.deezer.album&&m.external_metadata.deezer.album.id){
-          artUrl=`https://e-cdns-images.dzcdn.net/images/cover/${m.external_metadata.deezer.album.id}/264x264.jpg`;
-        }
-      }
-      if(artUrl){art.src=artUrl;art.style.display='block'}else{art.style.display='none'}
-      idStatus.textContent='';
-    }else{
-      art.style.display='none';
-      ti.textContent='';ar.textContent='';al.textContent='';
-      const msg=data.status?data.status.msg:'Unknown error';
-      idResult.innerHTML='<div class="error">❌ '+(data.status&&data.status.code===1001?'No match found — try with louder/clearer audio':msg)+'</div>';
-      idStatus.textContent='';
-    }
-    idResult.classList.add('show');
-  }
 })();
 </script>
 </body>
