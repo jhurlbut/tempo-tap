@@ -30,7 +30,10 @@
   <canvas id="graph"></canvas>
   <div class="steady-info" id="steadyInfo"></div>
 </div>
-<a class="shazam-link" href="https://www.shazam.com/recognise" target="_blank">🎵 Identify with Shazam</a>
+<a class="shazam-link" href="https://www.shazam.com/recognise" target="_blank" id="shazamLink">🎵 Identify with Shazam</a>
+<script>
+(function(){var a=document.getElementById('shazamLink');var ios=/iPhone|iPad|iPod/i.test(navigator.userAgent);var android=/Android/i.test(navigator.userAgent);if(ios){a.href='https://apps.apple.com/app/shazam/id284993459'}else if(android){a.href='intent://shazam.com/#Intent;package=com.shazam.android;scheme=https;end'}})();
+</script>
 <script>
 (()=>{
   const bpmEl=document.getElementById('bpm'),btn=document.getElementById('tap'),canvas=document.getElementById('graph'),ctx=canvas.getContext('2d'),steadyInfoEl=document.getElementById('steadyInfo');
